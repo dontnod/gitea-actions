@@ -12,13 +12,6 @@ inputs:
     description: 'slack webhook url secret'
     required: true
 
-env:
-  BRANCH: ${{ github.event_name == 'push' && github.ref_name || github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
-  EVENT_TYPE: ${{ github.event_name == 'push' && 'Commit' || github.event_name == 'pull_request' && 'Pull Request' || 'Commit' }}
-  COMMIT_URL: ${{ github.event_name == 'push' && github.event.head_commit.url || github.event_name == 'pull_request' && github.event.pull_request.url || github.event.head_commit.url }}
-  COMMIT_ID: ${{ github.event_name == 'push' && github.event.head_commit.id || github.event_name == 'pull_request' && github.event.pull_request.title || github.event.head_commit.id }}
-  AUTHOR: ${{ github.event_name == 'push' && github.event.head_commit.committer.username || github.event_name == 'pull_request' && github.event.pull_request.user.username || github.event.head_commit.committer.username }}
-
 runs:
   using: "composite"
   steps:
@@ -78,3 +71,8 @@ runs:
       env:
         SLACK_WEBHOOK_URL: ${{ inputs.SLACK_WEBHOOK_URL }}
         SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        BRANCH: ${{ github.event_name == 'push' && github.ref_name || github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+        EVENT_TYPE: ${{ github.event_name == 'push' && 'Commit' || github.event_name == 'pull_request' && 'Pull Request' || 'Commit' }}
+        COMMIT_URL: ${{ github.event_name == 'push' && github.event.head_commit.url || github.event_name == 'pull_request' && github.event.pull_request.url || github.event.head_commit.url }}
+        COMMIT_ID: ${{ github.event_name == 'push' && github.event.head_commit.id || github.event_name == 'pull_request' && github.event.pull_request.title || github.event.head_commit.id }}
+        AUTHOR: ${{ github.event_name == 'push' && github.event.head_commit.committer.username || github.event_name == 'pull_request' && github.event.pull_request.user.username || github.event.head_commit.committer.username }}
