@@ -1,9 +1,6 @@
 name: slack notif composite actions (handle 'push' and 'pull_request' event)
 
 inputs:
-  job_build_status:
-    description: "Status of 'actual' job (set in 'needs:') since job.status is status of current one"
-    required: true
   server_url: #github.server_url is empty for github
     description: "Base server url"
     required: false
@@ -28,13 +25,13 @@ runs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Build on repository <${{ github.event.repository.html_url }}|${{ github.event.repository.full_name }}> status: *${{ inputs.job_build_status }}*"
+                  "text": "Build on repository <${{ github.event.repository.html_url }}|${{ github.event.repository.full_name }}> status: *${{ job.status }}*"
                 }
               }
             ],
             "attachments": [
               {
-                  "color": "${{ inputs.job_build_status == 'success' && '#22bb33' || inputs.job_build_status == 'failure' && '#bb2124' || '#f0ad4e' }}",
+                  "color": "${{ job.status == 'success' && '#22bb33' || job.status == 'failure' && '#bb2124' || '#f0ad4e' }}",
                   "blocks": [
                       {
                           "type": "section",
