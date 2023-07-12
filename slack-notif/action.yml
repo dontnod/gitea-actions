@@ -1,0 +1,80 @@
+name: slack notif composite actions (handle 'push' and 'pull_request' event)
+
+inputs:
+  job_build_status:
+    description: "Status of 'actual' job (set in 'needs:') since job.status is status of current one"
+    required: true
+  server_url: #github.server_url is empty for github
+    description: "Base server url"
+    required: false
+    default: "https://github.com"
+  SLACK_WEBHOOK_URL: # composite actions does not support secrets like reusable workflow yet
+    description: 'slack webhook url secret'
+    required: true
+
+env:
+  BRANCH: ${{ github.event_name == 'push' && github.ref_name || github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
+  EVENT_TYPE: ${{ github.event_name == 'push' && 'Commit' || github.event_name == 'pull_request' && 'Pull Request' || 'Commit' }}
+  COMMIT_URL: ${{ github.event_name == 'push' && github.event.head_commit.url || github.event_name == 'pull_request' && github.event.pull_request.url || github.event.head_commit.url }}
+  COMMIT_ID: ${{ github.event_name == 'push' && github.event.head_commit.id || github.event_name == 'pull_request' && github.event.pull_request.title || github.event.head_commit.id }}
+  AUTHOR: ${{ github.event_name == 'push' && github.event.head_commit.committer.username || github.event_name == 'pull_request' && github.event.pull_request.user.username || github.event.head_commit.committer.username }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: slack notification
+      uses: https://github.com/slackapi/slack-github-action@v1.24.0
+      with:
+        # For posting a rich message using Block Kit
+        payload: |
+          {
+            "username": "giteaActions", 
+            "icon_emoji": ":gitea:",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Build on repository <${{ github.event.repository.html_url }}|${{ github.event.repository.full_name }}> status: *${{ inputs.job_build_status }}*"
+                }
+              }
+            ],
+            "attachments": [
+              {
+                  "color": "${{ inputs.job_build_status == 'success' && '#22bb33' || inputs.job_build_status == 'failure' && '#bb2124' || '#f0ad4e' }}",
+                  "blocks": [
+                      {
+                          "type": "section",
+                          "text": {
+                              "type": "mrkdwn",
+                              "text": "*Branch*\n<${{ github.event.repository.html_url }}/src/branch/${{ env.BRANCH }}|${{ env.BRANCH }}>"
+                          }
+                      },
+                      {
+                          "type": "section",
+                          "text": {
+                              "type": "mrkdwn",
+                              "text": "*Actions URL*\n<${{ github.event.repository.html_url }}/actions/runs/${{ github.run_number }}|job URL>"
+                          }
+                      },
+                      {
+                          "type": "section",
+                          "text": {
+                              "type": "mrkdwn",
+                              "text": "*${{ env.EVENT_TYPE }}*\n<${{ env.COMMIT_URL }}|${{ env.COMMIT_ID }}>"
+                          }
+                      },
+                      {
+                          "type": "section",
+                          "text": {
+                              "type": "mrkdwn",
+                              "text": "*Author*\n<${{ inputs.server_url }}/${{ env.AUTHOR }}|${{ env.AUTHOR }}>"
+                          }
+                      }
+                  ]
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ inputs.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
