@@ -1,0 +1,3 @@
+[submodule "checkout-action"]
+	path = src/externals/checkout-action
+	url = https://github.com/actions/checkout.git
