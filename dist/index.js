@@ -2421,6 +2421,83 @@ exports.getOrganizationId = getOrganizationId;
 
 /***/ }),
 
+/***/ 9621:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getMergeBase = exports.setupGitRepository = void 0;
+const core = __importStar(__nccwpck_require__(2186));
+const coreCommand = __importStar(__nccwpck_require__(7351));
+const path = __importStar(__nccwpck_require__(1017));
+const gitSourceProvider = __importStar(__nccwpck_require__(1748));
+const git_command_manager_1 = __nccwpck_require__(7431);
+function setupGitRepository(sourceSettings) {
+    return __awaiter(this, void 0, void 0, function* () {
+        core.startGroup('Setup conf repository');
+        try {
+            // Register github action problem matcher
+            coreCommand.issueCommand('add-matcher', {}, path.join(__dirname, 'checkout-action-problem-matcher.json'));
+            // Force depth 1 as we need to get history for 2 branches,
+            // which is not handle by checkout-action
+            sourceSettings.fetchDepth = 1;
+            // Setup repository
+            yield gitSourceProvider.getSource(sourceSettings);
+            const git = yield git_command_manager_1.GitCommandManager.createCommandManager(sourceSettings.repositoryPath, sourceSettings.lfs, sourceSettings.sparseCheckout != null);
+            return git;
+        }
+        finally {
+            // Unregister problem matcher
+            coreCommand.issueCommand('remove-matcher', { owner: 'checkout-git' }, '');
+            core.endGroup();
+        }
+    });
+}
+exports.setupGitRepository = setupGitRepository;
+function getMergeBase(repository, commits) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const output = yield repository.execGit(['merge-base'].concat(commits));
+        return output.stdout.trim();
+    });
+}
+exports.getMergeBase = getMergeBase;
+
+
+/***/ }),
+
 /***/ 3109:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -2460,13 +2537,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
-const coreCommand = __importStar(__nccwpck_require__(7351));
 const github = __importStar(__nccwpck_require__(5438));
 const gitSourceProvider = __importStar(__nccwpck_require__(1748));
 const inputHelper = __importStar(__nccwpck_require__(3465));
-const path = __importStar(__nccwpck_require__(1017));
 const stateHelper = __importStar(__nccwpck_require__(6926));
-const git_command_manager_1 = __nccwpck_require__(7431);
+const gitHelper = __importStar(__nccwpck_require__(9621));
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         const pr_context = github.context.payload.pull_request;
@@ -2494,16 +2569,15 @@ function run() {
             sourceSettings.persistCredentials = true;
             // Start at branch point to generate base config export
             sourceSettings.commit = pr_context.base.sha;
-            const confRepository = yield setupGitRepository(sourceSettings);
+            const confRepository = yield gitHelper.setupGitRepository(sourceSettings);
             core.startGroup('Fetch base and head');
             yield confRepository.fetch([pr_context.base.sha, pr_context.head.sha], {});
             core.endGroup();
             // We should be able to use `pr_context.merge_base` but Gitea sends a outdated one
-            const mergeBase = (yield confRepository.execGit([
-                'merge-base',
+            const mergeBase = yield gitHelper.getMergeBase(confRepository, [
                 pr_context.base.sha,
                 pr_context.head.sha
-            ])).stdout.trim();
+            ]);
             if (mergeBase !== pr_context.base.sha) {
                 core.setFailed(`Merge base between PR Base (${pr_context.base.sha}) and PR head (${pr_context.head.sha}) is different from PR base current head (found merge-base ${mergeBase}). This is unsupported at the moment, please rebase your branch.`);
                 return;
@@ -2524,27 +2598,6 @@ function cleanup() {
         catch (error) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             core.warning(`${(_a = error === null || error === void 0 ? void 0 : error.message) !== null && _a !== void 0 ? _a : error}`);
-        }
-    });
-}
-function setupGitRepository(sourceSettings) {
-    return __awaiter(this, void 0, void 0, function* () {
-        core.startGroup('Setup conf repository');
-        try {
-            // Register github action problem matcher
-            coreCommand.issueCommand('add-matcher', {}, path.join(__dirname, 'checkout-action-problem-matcher.json'));
-            // Force depth 1 as we need to get history for 2 branches,
-            // which is not handle by checkout-action
-            sourceSettings.fetchDepth = 1;
-            // Setup repository
-            yield gitSourceProvider.getSource(sourceSettings);
-            const git = yield git_command_manager_1.GitCommandManager.createCommandManager(sourceSettings.repositoryPath, sourceSettings.lfs, sourceSettings.sparseCheckout != null);
-            return git;
-        }
-        finally {
-            // Unregister problem matcher
-            coreCommand.issueCommand('remove-matcher', { owner: 'checkout-git' }, '');
-            core.endGroup();
         }
     });
 }

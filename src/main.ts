@@ -1,12 +1,9 @@
 import * as core from '@actions/core'
-import * as coreCommand from '@actions/core/lib/command'
 import * as github from '@actions/github'
 import * as gitSourceProvider from './externals/checkout-action/src/git-source-provider'
 import * as inputHelper from './externals/checkout-action/src/input-helper'
-import * as path from 'path'
 import * as stateHelper from './externals/checkout-action/src/state-helper'
-import {GitCommandManager} from './externals/checkout-action/src/git-command-manager'
-import {IGitSourceSettings} from './externals/checkout-action/src/git-source-settings'
+import * as gitHelper from './git-helper'
 
 async function run(): Promise<void> {
   const pr_context = github.context.payload.pull_request
@@ -38,20 +35,17 @@ async function run(): Promise<void> {
     // Start at branch point to generate base config export
     sourceSettings.commit = pr_context.base.sha
 
-    const confRepository = await setupGitRepository(sourceSettings)
+    const confRepository = await gitHelper.setupGitRepository(sourceSettings)
 
     core.startGroup('Fetch base and head')
     await confRepository.fetch([pr_context.base.sha, pr_context.head.sha], {})
     core.endGroup()
 
     // We should be able to use `pr_context.merge_base` but Gitea sends a outdated one
-    const mergeBase = (
-      await confRepository.execGit([
-        'merge-base',
-        pr_context.base.sha,
-        pr_context.head.sha
-      ])
-    ).stdout.trim()
+    const mergeBase = await gitHelper.getMergeBase(confRepository, [
+      pr_context.base.sha,
+      pr_context.head.sha
+    ])
     if (mergeBase !== pr_context.base.sha) {
       core.setFailed(
         `Merge base between PR Base (${pr_context.base.sha}) and PR head (${pr_context.head.sha}) is different from PR base current head (found merge-base ${mergeBase}). This is unsupported at the moment, please rebase your branch.`
@@ -69,39 +63,6 @@ async function cleanup(): Promise<void> {
   } catch (error) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     core.warning(`${(error as any)?.message ?? error}`)
-  }
-}
-
-async function setupGitRepository(
-  sourceSettings: IGitSourceSettings
-): Promise<GitCommandManager> {
-  core.startGroup('Setup conf repository')
-  try {
-    // Register github action problem matcher
-    coreCommand.issueCommand(
-      'add-matcher',
-      {},
-      path.join(__dirname, 'checkout-action-problem-matcher.json')
-    )
-
-    // Force depth 1 as we need to get history for 2 branches,
-    // which is not handle by checkout-action
-    sourceSettings.fetchDepth = 1
-    // Setup repository
-    await gitSourceProvider.getSource(sourceSettings)
-
-    const git = await GitCommandManager.createCommandManager(
-      sourceSettings.repositoryPath,
-      sourceSettings.lfs,
-      sourceSettings.sparseCheckout != null
-    )
-
-    return git
-  } finally {
-    // Unregister problem matcher
-    coreCommand.issueCommand('remove-matcher', {owner: 'checkout-git'}, '')
-
-    core.endGroup()
   }
 }
 
