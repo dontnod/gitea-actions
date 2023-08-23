@@ -1,19 +1,44 @@
 import * as core from '@actions/core'
-import {wait} from './wait'
+import * as coreCommand from '@actions/core/lib/command'
+import * as github from '@actions/github'
+import * as path from 'path'
+import * as gitSourceProvider from './externals/checkout-action/src/git-source-provider'
+import * as inputHelper from './externals/checkout-action/src/input-helper'
+import * as stateHelper from './externals/checkout-action/src/state-helper'
 
 async function run(): Promise<void> {
-  try {
-    const ms: string = core.getInput('milliseconds')
-    core.debug(`Waiting ${ms} milliseconds ...`) // debug is only output if you set the secret `ACTIONS_STEP_DEBUG` to true
+  const pr_base: string | undefined =
+    github.context.payload.pull_request?.base.sha
 
-    core.debug(new Date().toTimeString())
-    await wait(parseInt(ms, 10))
-    core.debug(new Date().toTimeString())
+  if (!pr_base) {
+    core.setFailed(`Failed to determine PR base. Abort.`)
+    return
+  }
 
-    core.setOutput('time', new Date().toTimeString())
-  } catch (error) {
-    if (error instanceof Error) core.setFailed(error.message)
+  const pr_target_head: string | undefined =
+    github.context.payload.pull_request?.head.sha
+  if (pr_target_head !== pr_base) {
+    core.setFailed(
+      `PR base (${pr_base}) is not the same as target branch head (${pr_target_head}). This is unsupported at the moment, please rebase your branch.`
+    )
+    return
   }
 }
 
-run()
+async function cleanup(): Promise<void> {
+  try {
+    await gitSourceProvider.cleanup(stateHelper.RepositoryPath)
+  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    core.warning(`${(error as any)?.message ?? error}`)
+  }
+}
+
+// Main
+if (!stateHelper.IsPost) {
+  run()
+}
+// Post
+else {
+  cleanup()
+}
