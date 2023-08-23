@@ -1,6 +1,183 @@
 require('./sourcemap-register.js');/******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
 
+/***/ 7467:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.exportPullRequestConfiguration = exports.EXPORT_REPOSITORY_PATH = void 0;
+const core = __importStar(__nccwpck_require__(2186));
+const exec = __importStar(__nccwpck_require__(1514));
+const github = __importStar(__nccwpck_require__(5438));
+const fsHelper = __importStar(__nccwpck_require__(563));
+const io = __importStar(__nccwpck_require__(7436));
+const git_command_manager_1 = __nccwpck_require__(7431);
+exports.EXPORT_REPOSITORY_PATH = `/tmp/${github.context.job}/${github.context.runNumber}`;
+function exportPullRequestConfiguration(configurationRepository, baseSha, headSha, fast = false, outputRepositoryUrl) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const exportRepository = yield initExportRepo();
+        // Do a first export on base commit
+        yield configurationRepository.checkout(baseSha, '');
+        yield runExportConfiguration(exportRepository, configurationRepository);
+        // NOTE(TDS): Tag this commit?
+        const baseExportedSha = yield exportRepository.revParse('HEAD');
+        const commitList = fast
+            ? [headSha]
+            : yield getCommitList(configurationRepository, baseSha, headSha);
+        for (const commit of commitList) {
+            yield configurationRepository.checkout(commit, '');
+            yield runExportConfiguration(exportRepository, configurationRepository);
+        }
+        const headExportedSha = yield exportRepository.revParse('HEAD');
+        if (outputRepositoryUrl) {
+            const branchName = `${github.context.job}/${github.context.runNumber}`;
+            exportRepository.execGit([
+                'push',
+                '--force',
+                outputRepositoryUrl,
+                `HEAD:${branchName}`
+            ]);
+        }
+        return { baseExportedSha, headExportedSha };
+    });
+}
+exports.exportPullRequestConfiguration = exportPullRequestConfiguration;
+function initExportRepo() {
+    return __awaiter(this, void 0, void 0, function* () {
+        core.startGroup('Initialize export repository');
+        // Remove conflicting file path
+        if (fsHelper.fileExistsSync(exports.EXPORT_REPOSITORY_PATH)) {
+            yield io.rmRF(exports.EXPORT_REPOSITORY_PATH);
+        }
+        // Create directory
+        if (!fsHelper.directoryExistsSync(exports.EXPORT_REPOSITORY_PATH)) {
+            yield io.mkdirP(exports.EXPORT_REPOSITORY_PATH);
+        }
+        const git = yield git_command_manager_1.GitCommandManager.createCommandManager(exports.EXPORT_REPOSITORY_PATH, false, false);
+        yield git.init();
+        core.endGroup();
+        return git;
+    });
+}
+function getPrettyCommitMessage(git) {
+    return __awaiter(this, void 0, void 0, function* () {
+        core.startGroup('Generate pretty commit for exported configuration');
+        const logOutput = yield git.execGit([
+            'log',
+            '--no-decorate',
+            '--oneline',
+            '-1'
+        ]);
+        core.endGroup();
+        return logOutput.stdout.trim();
+    });
+}
+function getCommitList(git, base, head) {
+    return __awaiter(this, void 0, void 0, function* () {
+        core.startGroup(`Get commits included in range ]${base}, ${head}]`);
+        const args = ['rev-list', '--reverse', '--first-parent', `${base}...${head}`];
+        const output = yield git.execGit(args);
+        core.endGroup();
+        return output.stdout.trim().split('\n');
+    });
+}
+function runExportConfiguration(exportRepository, configurationRepository) {
+    return __awaiter(this, void 0, void 0, function* () {
+        core.startGroup('Export Configuration');
+        core.startGroup('Remove previously exported configuration');
+        const gitRmArgs = [
+            'rm',
+            '--quiet',
+            '-r',
+            '--force',
+            '--ignore-unmatch',
+            '--',
+            '*'
+        ];
+        // Remove previous export
+        yield exportRepository.execGit(gitRmArgs);
+        core.endGroup();
+        core.startGroup('Find Python2 exe');
+        let python2Path;
+        try {
+            python2Path = yield io.which('python2', true);
+        }
+        catch (_a) {
+            python2Path = yield io.which('python', true);
+        }
+        core.endGroup();
+        core.startGroup('Run exporter');
+        const exportArgs = [
+            '-m',
+            'administration.master_config_utils',
+            'export',
+            '--skip-check',
+            '--tree',
+            '-o',
+            exportRepository.getWorkingDirectory()
+        ];
+        yield exec.exec(python2Path, exportArgs, {
+            cwd: configurationRepository.getWorkingDirectory()
+        });
+        core.endGroup();
+        core.startGroup('Add exported configuration');
+        const gitAddArgs = ['add', '--force', '--', '.'];
+        yield exportRepository.execGit(gitAddArgs);
+        core.endGroup();
+        core.startGroup('Commit exported configuration');
+        const commitMessage = yield getPrettyCommitMessage(configurationRepository);
+        const gitCommitArgs = [
+            '-c',
+            `user.email=${github.context.actor}@noreply.com`,
+            '-c',
+            `user.name=${github.context.actor}`,
+            'commit',
+            '-m',
+            `${commitMessage.replace('"', '\\"')}`
+        ];
+        yield exportRepository.execGit(gitCommitArgs);
+        core.endGroup();
+        core.endGroup();
+    });
+}
+
+
+/***/ }),
+
 /***/ 563:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -2542,6 +2719,7 @@ const gitSourceProvider = __importStar(__nccwpck_require__(1748));
 const inputHelper = __importStar(__nccwpck_require__(3465));
 const stateHelper = __importStar(__nccwpck_require__(6926));
 const gitHelper = __importStar(__nccwpck_require__(9621));
+const buildbotExport = __importStar(__nccwpck_require__(7467));
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         const pr_context = github.context.payload.pull_request;
@@ -2569,12 +2747,12 @@ function run() {
             sourceSettings.persistCredentials = true;
             // Start at branch point to generate base config export
             sourceSettings.commit = pr_context.base.sha;
-            const confRepository = yield gitHelper.setupGitRepository(sourceSettings);
+            const configurationRepository = yield gitHelper.setupGitRepository(sourceSettings);
             core.startGroup('Fetch base and head');
-            yield confRepository.fetch([pr_context.base.sha, pr_context.head.sha], {});
+            yield configurationRepository.fetch([pr_context.base.sha, pr_context.head.sha], {});
             core.endGroup();
             // We should be able to use `pr_context.merge_base` but Gitea sends a outdated one
-            const mergeBase = yield gitHelper.getMergeBase(confRepository, [
+            const mergeBase = yield gitHelper.getMergeBase(configurationRepository, [
                 pr_context.base.sha,
                 pr_context.head.sha
             ]);
@@ -2582,6 +2760,10 @@ function run() {
                 core.setFailed(`Merge base between PR Base (${pr_context.base.sha}) and PR head (${pr_context.head.sha}) is different from PR base current head (found merge-base ${mergeBase}). This is unsupported at the moment, please rebase your branch.`);
                 return;
             }
+            const result = yield buildbotExport.exportPullRequestConfiguration(configurationRepository, pr_context.base.sha, pr_context.head.sha, core.getBooleanInput('fast-export'), core.getInput('repository-output'));
+            core.info(`Finished config export. ${result.baseExportedSha} to ${result.headExportedSha}`);
+            core.setOutput('base-exported-sha', result.baseExportedSha);
+            core.setOutput('head-exported-sha', result.headExportedSha);
         }
         catch (error) {
             if (error instanceof Error)
@@ -2590,7 +2772,7 @@ function run() {
     });
 }
 function cleanup() {
-    var _a;
+    var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
         try {
             yield gitSourceProvider.cleanup(stateHelper.RepositoryPath);
@@ -2598,6 +2780,13 @@ function cleanup() {
         catch (error) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             core.warning(`${(_a = error === null || error === void 0 ? void 0 : error.message) !== null && _a !== void 0 ? _a : error}`);
+        }
+        try {
+            yield gitSourceProvider.cleanup(buildbotExport.EXPORT_REPOSITORY_PATH);
+        }
+        catch (error) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            core.warning(`${(_b = error === null || error === void 0 ? void 0 : error.message) !== null && _b !== void 0 ? _b : error}`);
         }
     });
 }

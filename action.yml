@@ -1,6 +1,13 @@
 name: 'Buildbot Pull Request Config differ'
 description: 'Provide a description here'
 inputs:
+  repository-output:
+    required: true
+    description: 'if provided, will push a branch to this repository with a commit for each commit in the pull request'
+  fast-export:
+    description: 'Will only export base and head commit'
+    default: true
+
 # Github Checkout inputs
   repository:
     description: 'Repository name with owner. For example, actions/checkout'
@@ -84,6 +91,13 @@ inputs:
   github-server-url:
     description: The base URL for the GitHub instance that you are trying to clone from, will use environment defaults to fetch from the same instance that the workflow is running from unless specified. Example URLs are https://github.com or https://my-ghes-server.example.com
     required: false
+
+outputs:
+  base-exported-sha:
+    description: 'Sha in the exported repository of the pull request base revision'
+  head-exported-sha:
+    description: 'Sha in the exported repository of the pull request head revision'
+
 runs:
   using: node16
   main: dist/index.js

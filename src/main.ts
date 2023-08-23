@@ -4,6 +4,7 @@ import * as gitSourceProvider from './externals/checkout-action/src/git-source-p
 import * as inputHelper from './externals/checkout-action/src/input-helper'
 import * as stateHelper from './externals/checkout-action/src/state-helper'
 import * as gitHelper from './git-helper'
+import * as buildbotExport from './buildbot-export'
 
 async function run(): Promise<void> {
   const pr_context = github.context.payload.pull_request
@@ -35,14 +36,19 @@ async function run(): Promise<void> {
     // Start at branch point to generate base config export
     sourceSettings.commit = pr_context.base.sha
 
-    const confRepository = await gitHelper.setupGitRepository(sourceSettings)
+    const configurationRepository = await gitHelper.setupGitRepository(
+      sourceSettings
+    )
 
     core.startGroup('Fetch base and head')
-    await confRepository.fetch([pr_context.base.sha, pr_context.head.sha], {})
+    await configurationRepository.fetch(
+      [pr_context.base.sha, pr_context.head.sha],
+      {}
+    )
     core.endGroup()
 
     // We should be able to use `pr_context.merge_base` but Gitea sends a outdated one
-    const mergeBase = await gitHelper.getMergeBase(confRepository, [
+    const mergeBase = await gitHelper.getMergeBase(configurationRepository, [
       pr_context.base.sha,
       pr_context.head.sha
     ])
@@ -52,6 +58,21 @@ async function run(): Promise<void> {
       )
       return
     }
+
+    const result = await buildbotExport.exportPullRequestConfiguration(
+      configurationRepository,
+      pr_context.base.sha,
+      pr_context.head.sha,
+      core.getBooleanInput('fast-export'),
+      core.getInput('repository-output')
+    )
+
+    core.info(
+      `Finished config export. ${result.baseExportedSha} to ${result.headExportedSha}`
+    )
+
+    core.setOutput('base-exported-sha', result.baseExportedSha)
+    core.setOutput('head-exported-sha', result.headExportedSha)
   } catch (error) {
     if (error instanceof Error) core.setFailed(error.message)
   }
@@ -60,6 +81,12 @@ async function run(): Promise<void> {
 async function cleanup(): Promise<void> {
   try {
     await gitSourceProvider.cleanup(stateHelper.RepositoryPath)
+  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    core.warning(`${(error as any)?.message ?? error}`)
+  }
+  try {
+    await gitSourceProvider.cleanup(buildbotExport.EXPORT_REPOSITORY_PATH)
   } catch (error) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     core.warning(`${(error as any)?.message ?? error}`)
