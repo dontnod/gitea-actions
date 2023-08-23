@@ -1647,6 +1647,162 @@ function downloadArchive(authToken, owner, repo, ref, commit, baseUrl) {
 
 /***/ }),
 
+/***/ 3465:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getInputs = void 0;
+const core = __importStar(__nccwpck_require__(2186));
+const fsHelper = __importStar(__nccwpck_require__(563));
+const github = __importStar(__nccwpck_require__(5438));
+const path = __importStar(__nccwpck_require__(1017));
+const workflowContextHelper = __importStar(__nccwpck_require__(8694));
+function getInputs() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const result = {};
+        // GitHub workspace
+        let githubWorkspacePath = process.env['GITHUB_WORKSPACE'];
+        if (!githubWorkspacePath) {
+            throw new Error('GITHUB_WORKSPACE not defined');
+        }
+        githubWorkspacePath = path.resolve(githubWorkspacePath);
+        core.debug(`GITHUB_WORKSPACE = '${githubWorkspacePath}'`);
+        fsHelper.directoryExistsSync(githubWorkspacePath, true);
+        // Qualified repository
+        const qualifiedRepository = core.getInput('repository') ||
+            `${github.context.repo.owner}/${github.context.repo.repo}`;
+        core.debug(`qualified repository = '${qualifiedRepository}'`);
+        const splitRepository = qualifiedRepository.split('/');
+        if (splitRepository.length !== 2 ||
+            !splitRepository[0] ||
+            !splitRepository[1]) {
+            throw new Error(`Invalid repository '${qualifiedRepository}'. Expected format {owner}/{repo}.`);
+        }
+        result.repositoryOwner = splitRepository[0];
+        result.repositoryName = splitRepository[1];
+        // Repository path
+        result.repositoryPath = core.getInput('path') || '.';
+        result.repositoryPath = path.resolve(githubWorkspacePath, result.repositoryPath);
+        if (!(result.repositoryPath + path.sep).startsWith(githubWorkspacePath + path.sep)) {
+            throw new Error(`Repository path '${result.repositoryPath}' is not under '${githubWorkspacePath}'`);
+        }
+        // Workflow repository?
+        const isWorkflowRepository = qualifiedRepository.toUpperCase() ===
+            `${github.context.repo.owner}/${github.context.repo.repo}`.toUpperCase();
+        // Source branch, source version
+        result.ref = core.getInput('ref');
+        if (!result.ref) {
+            if (isWorkflowRepository) {
+                result.ref = github.context.ref;
+                result.commit = github.context.sha;
+                // Some events have an unqualifed ref. For example when a PR is merged (pull_request closed event),
+                // the ref is unqualifed like "main" instead of "refs/heads/main".
+                if (result.commit && result.ref && !result.ref.startsWith('refs/')) {
+                    result.ref = `refs/heads/${result.ref}`;
+                }
+            }
+        }
+        // SHA?
+        else if (result.ref.match(/^[0-9a-fA-F]{40}$/)) {
+            result.commit = result.ref;
+            result.ref = '';
+        }
+        core.debug(`ref = '${result.ref}'`);
+        core.debug(`commit = '${result.commit}'`);
+        // Clean
+        result.clean = (core.getInput('clean') || 'true').toUpperCase() === 'TRUE';
+        core.debug(`clean = ${result.clean}`);
+        // Sparse checkout
+        const sparseCheckout = core.getMultilineInput('sparse-checkout');
+        if (sparseCheckout.length) {
+            result.sparseCheckout = sparseCheckout;
+            core.debug(`sparse checkout = ${result.sparseCheckout}`);
+        }
+        result.sparseCheckoutConeMode =
+            (core.getInput('sparse-checkout-cone-mode') || 'true').toUpperCase() ===
+                'TRUE';
+        // Fetch depth
+        result.fetchDepth = Math.floor(Number(core.getInput('fetch-depth') || '1'));
+        if (isNaN(result.fetchDepth) || result.fetchDepth < 0) {
+            result.fetchDepth = 0;
+        }
+        core.debug(`fetch depth = ${result.fetchDepth}`);
+        // LFS
+        result.lfs = (core.getInput('lfs') || 'false').toUpperCase() === 'TRUE';
+        core.debug(`lfs = ${result.lfs}`);
+        // Submodules
+        result.submodules = false;
+        result.nestedSubmodules = false;
+        const submodulesString = (core.getInput('submodules') || '').toUpperCase();
+        if (submodulesString == 'RECURSIVE') {
+            result.submodules = true;
+            result.nestedSubmodules = true;
+        }
+        else if (submodulesString == 'TRUE') {
+            result.submodules = true;
+        }
+        core.debug(`submodules = ${result.submodules}`);
+        core.debug(`recursive submodules = ${result.nestedSubmodules}`);
+        // Auth token
+        result.authToken = core.getInput('token', { required: true });
+        // SSH
+        result.sshKey = core.getInput('ssh-key');
+        result.sshKnownHosts = core.getInput('ssh-known-hosts');
+        result.sshStrict =
+            (core.getInput('ssh-strict') || 'true').toUpperCase() === 'TRUE';
+        // Persist credentials
+        result.persistCredentials =
+            (core.getInput('persist-credentials') || 'false').toUpperCase() === 'TRUE';
+        // Workflow organization ID
+        result.workflowOrganizationId = yield workflowContextHelper.getOrganizationId();
+        // Set safe.directory in git global config.
+        result.setSafeDirectory =
+            (core.getInput('set-safe-directory') || 'true').toUpperCase() === 'TRUE';
+        // Determine the GitHub URL that the repository is being hosted from
+        result.githubServerUrl = core.getInput('github-server-url');
+        core.debug(`GitHub Host URL = ${result.githubServerUrl}`);
+        return result;
+    });
+}
+exports.getInputs = getInputs;
+
+
+/***/ }),
+
 /***/ 7497:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -2192,6 +2348,79 @@ exports.isGhes = isGhes;
 
 /***/ }),
 
+/***/ 8694:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getOrganizationId = void 0;
+const core = __importStar(__nccwpck_require__(2186));
+const fs = __importStar(__nccwpck_require__(7147));
+/**
+ * Gets the organization ID of the running workflow or undefined if the value cannot be loaded from the GITHUB_EVENT_PATH
+ */
+function getOrganizationId() {
+    var _a, _b;
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const eventPath = process.env.GITHUB_EVENT_PATH;
+            if (!eventPath) {
+                core.debug(`GITHUB_EVENT_PATH is not defined`);
+                return;
+            }
+            const content = yield fs.promises.readFile(eventPath, { encoding: 'utf8' });
+            const event = JSON.parse(content);
+            const id = (_b = (_a = event === null || event === void 0 ? void 0 : event.repository) === null || _a === void 0 ? void 0 : _a.owner) === null || _b === void 0 ? void 0 : _b.id;
+            if (typeof id !== 'number') {
+                core.debug('Repository owner ID not found within GITHUB event info');
+                return;
+            }
+            return id;
+        }
+        catch (err) {
+            core.debug(`Unable to load organization ID from GITHUB_EVENT_PATH: ${err
+                .message || err}`);
+        }
+    });
+}
+exports.getOrganizationId = getOrganizationId;
+
+
+/***/ }),
+
 /***/ 3109:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -2231,21 +2460,58 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
+const coreCommand = __importStar(__nccwpck_require__(7351));
 const github = __importStar(__nccwpck_require__(5438));
 const gitSourceProvider = __importStar(__nccwpck_require__(1748));
+const inputHelper = __importStar(__nccwpck_require__(3465));
+const path = __importStar(__nccwpck_require__(1017));
 const stateHelper = __importStar(__nccwpck_require__(6926));
+const git_command_manager_1 = __nccwpck_require__(7431);
 function run() {
-    var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
-        const pr_base = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.base.sha;
-        if (!pr_base) {
-            core.setFailed(`Failed to determine PR base. Abort.`);
+        const pr_context = github.context.payload.pull_request;
+        if (!pr_context) {
+            core.setFailed('PR context is unset. Abort.');
             return;
         }
-        const pr_target_head = (_b = github.context.payload.pull_request) === null || _b === void 0 ? void 0 : _b.head.sha;
-        if (pr_target_head !== pr_base) {
-            core.setFailed(`PR base (${pr_base}) is not the same as target branch head (${pr_target_head}). This is unsupported at the moment, please rebase your branch.`);
+        if (pr_context.merged) {
+            core.info('PR already merged. Early out.');
             return;
+        }
+        if (!pr_context.base.sha) {
+            core.setFailed(`Failed to retrieve PR base from context. Abort.`);
+            return;
+        }
+        if (!pr_context.head.sha) {
+            core.setFailed(`Failed to retrieve PR head from context. Abort.`);
+            return;
+        }
+        try {
+            // Use github checkout action getInputs to retrieve default and maybe expose some
+            // in the future is relevant
+            const sourceSettings = yield inputHelper.getInputs();
+            // override some to match needed behaviour
+            sourceSettings.persistCredentials = true;
+            // Start at branch point to generate base config export
+            sourceSettings.commit = pr_context.base.sha;
+            const confRepository = yield setupGitRepository(sourceSettings);
+            core.startGroup('Fetch base and head');
+            yield confRepository.fetch([pr_context.base.sha, pr_context.head.sha], {});
+            core.endGroup();
+            // We should be able to use `pr_context.merge_base` but Gitea sends a outdated one
+            const mergeBase = (yield confRepository.execGit([
+                'merge-base',
+                pr_context.base.sha,
+                pr_context.head.sha
+            ])).stdout.trim();
+            if (mergeBase !== pr_context.base.sha) {
+                core.setFailed(`Merge base between PR Base (${pr_context.base.sha}) and PR head (${pr_context.head.sha}) is different from PR base current head (found merge-base ${mergeBase}). This is unsupported at the moment, please rebase your branch.`);
+                return;
+            }
+        }
+        catch (error) {
+            if (error instanceof Error)
+                core.setFailed(error.message);
         }
     });
 }
@@ -2258,6 +2524,27 @@ function cleanup() {
         catch (error) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             core.warning(`${(_a = error === null || error === void 0 ? void 0 : error.message) !== null && _a !== void 0 ? _a : error}`);
+        }
+    });
+}
+function setupGitRepository(sourceSettings) {
+    return __awaiter(this, void 0, void 0, function* () {
+        core.startGroup('Setup conf repository');
+        try {
+            // Register github action problem matcher
+            coreCommand.issueCommand('add-matcher', {}, path.join(__dirname, 'checkout-action-problem-matcher.json'));
+            // Force depth 1 as we need to get history for 2 branches,
+            // which is not handle by checkout-action
+            sourceSettings.fetchDepth = 1;
+            // Setup repository
+            yield gitSourceProvider.getSource(sourceSettings);
+            const git = yield git_command_manager_1.GitCommandManager.createCommandManager(sourceSettings.repositoryPath, sourceSettings.lfs, sourceSettings.sparseCheckout != null);
+            return git;
+        }
+        finally {
+            // Unregister problem matcher
+            coreCommand.issueCommand('remove-matcher', { owner: 'checkout-git' }, '');
+            core.endGroup();
         }
     });
 }
