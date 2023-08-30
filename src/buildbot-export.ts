@@ -154,6 +154,7 @@ async function runExportConfiguration(
     '-c',
     `user.name=${github.context.actor}`,
     'commit',
+    '--allow-empty',
     '-m',
     `${commitMessage.replace('"', '\\"')}`
   ]

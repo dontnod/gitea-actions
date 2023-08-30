@@ -166,6 +166,7 @@ function runExportConfiguration(exportRepository, configurationRepository) {
             '-c',
             `user.name=${github.context.actor}`,
             'commit',
+            '--allow-empty',
             '-m',
             `${commitMessage.replace('"', '\\"')}`
         ];
