@@ -7,6 +7,14 @@ inputs:
   fast-export:
     description: 'Will only export base and head commit'
     default: true
+  use-python-2:
+    required: true
+    description: 'Whether to use py2 or py3 for export (Buildbot0.8 vs Buildbot3)'
+    default: false
+  config-utils-module:
+    required: true
+    description: 'Python module path to master config utils'
+    default: scripts.admin.master_config_utils
 
 # Github Checkout inputs
   repository:

@@ -117,25 +117,29 @@ async function runExportConfiguration(
   core.endGroup()
 
   core.startGroup('Find Python2 exe')
-  let python2Path
+  let pythonPath: string
   try {
-    python2Path = await io.which('python2', true)
+    if (core.getBooleanInput('use-python-2')) {
+      pythonPath = await io.which('python2', true)
+    } else {
+      pythonPath = await io.which('python3', true)
+    }
   } catch {
-    python2Path = await io.which('python', true)
+    pythonPath = await io.which('python', true)
   }
   core.endGroup()
 
   core.startGroup('Run exporter')
   const exportArgs = [
     '-m',
-    'administration.master_config_utils',
+    core.getInput('config-utils-module'),
     'export',
     '--skip-check',
     '--tree',
     '-o',
     exportRepository.getWorkingDirectory()
   ]
-  await exec.exec(python2Path, exportArgs, {
+  await exec.exec(pythonPath, exportArgs, {
     cwd: configurationRepository.getWorkingDirectory()
   })
   core.endGroup()

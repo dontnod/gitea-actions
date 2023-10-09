@@ -132,25 +132,30 @@ function runExportConfiguration(exportRepository, configurationRepository) {
         yield exportRepository.execGit(gitRmArgs);
         core.endGroup();
         core.startGroup('Find Python2 exe');
-        let python2Path;
+        let pythonPath;
         try {
-            python2Path = yield io.which('python2', true);
+            if (core.getBooleanInput('use-python-2')) {
+                pythonPath = yield io.which('python2', true);
+            }
+            else {
+                pythonPath = yield io.which('python3', true);
+            }
         }
         catch (_a) {
-            python2Path = yield io.which('python', true);
+            pythonPath = yield io.which('python', true);
         }
         core.endGroup();
         core.startGroup('Run exporter');
         const exportArgs = [
             '-m',
-            'administration.master_config_utils',
+            core.getInput('config-utils-module'),
             'export',
             '--skip-check',
             '--tree',
             '-o',
             exportRepository.getWorkingDirectory()
         ];
-        yield exec.exec(python2Path, exportArgs, {
+        yield exec.exec(pythonPath, exportArgs, {
             cwd: configurationRepository.getWorkingDirectory()
         });
         core.endGroup();
